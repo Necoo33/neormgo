@@ -1,4 +1,4 @@
-module neormgo
+module github.com/Necoo33/neormgo
 
 go 1.23.0
 
