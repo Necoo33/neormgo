@@ -10,7 +10,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// daha sonra kullanıcı eklemeyi ve kullanıcı'ye yetki vermeyi ekle.
+const Version = "0.2.0"
 
 type Neorm struct {
 	Schema    string
@@ -196,8 +196,6 @@ func (orm Neorm) IfNotExist() Neorm {
 		panic("You cannot add 'IF NOT EXISTS' parameter if you don't start to create a schema or table.")
 	}
 
-	fmt.Printf("IfNotExist query'sinde mevcud query: %s\n", orm.Query)
-
 	return orm
 }
 
@@ -239,7 +237,7 @@ func (orm *Neorm) NotNull() Neorm {
 }
 
 func (orm *Neorm) AutoIncrement() Neorm {
-	orm.Query = fmt.Sprintf("%s AUTO INCREMENT", orm.Query)
+	orm.Query = fmt.Sprintf("%s AUTO_INCREMENT", orm.Query)
 
 	return *orm
 }
@@ -1149,8 +1147,6 @@ func (orm *Neorm) Finish() Neorm {
 	} else {
 		orm.Query = fmt.Sprintf("%s;", orm.Query)
 	}
-
-	fmt.Printf("Finish usulünde mevcut query: %s\n", orm.Query)
 
 	return *orm
 }
