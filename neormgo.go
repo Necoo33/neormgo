@@ -288,7 +288,9 @@ func (orm *Neorm) Default(value interface{}) Neorm {
 		splitTheColumnType == "MEDIUMTEXT" ||
 		splitTheColumnType == "LONGTEXT" ||
 		splitTheColumnType == "BINARY" ||
-		splitTheColumnType == "VARBINARY" {
+		splitTheColumnType == "VARBINARY" ||
+		splitTheColumnType == "DATETIME" ||
+		splitTheColumnType == "TIMESTAMP" {
 		switch t := value.(type) {
 		case string, map[string]interface{}:
 			orm.Query = fmt.Sprintf("%s DEFAULT %s", orm.Query, t)
