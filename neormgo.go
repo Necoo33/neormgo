@@ -288,8 +288,16 @@ func (orm *Neorm) Default(value interface{}) Neorm {
 		splitTheColumnType == "MEDIUMTEXT" ||
 		splitTheColumnType == "LONGTEXT" ||
 		splitTheColumnType == "BINARY" ||
-		splitTheColumnType == "VARBINARY" ||
-		splitTheColumnType == "DATETIME" ||
+		splitTheColumnType == "VARBINARY" {
+		switch t := value.(type) {
+		case string, map[string]interface{}:
+			orm.Query = fmt.Sprintf("%s DEFAULT '%s'", orm.Query, t)
+		default:
+			panic("You cannot give any other default value than string or json if your column is a mysql string variant.")
+		}
+	}
+
+	if splitTheColumnType == "DATETIME" ||
 		splitTheColumnType == "TIMESTAMP" {
 		switch t := value.(type) {
 		case string, map[string]interface{}:
