@@ -13,6 +13,8 @@ It includes this functionalities:
 
 It has almost everything that an engineer can want from orm and it's Query, schema And table builders tested in different situations.
 
+It supports mysql, postgresql, sqlite and microsoft sql server.
+
 ## Examples
 
 ### Initialization
@@ -35,7 +37,7 @@ import (
 
 neorm := orm.Neorm{}
 
-database, err := database.Connect("username:password@tcp(127.0.0.1:3306)/schema_name") // schema name not necessary
+database, err := database.Connect("username:password@tcp(127.0.0.1:3306)/schema_name", "mysql") // schema name not necessary
 
 if err != nil {
 // do your error checking
@@ -94,6 +96,12 @@ insert := database.Insert(columns, values)
 insert.Table("blogs")
 insert.Finish()
 insert.Execute()
+
+lid, err := insert.LastInsertId()
+
+if err != nil {
+
+}
 
 ```
 

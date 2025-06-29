@@ -7,10 +7,22 @@ import (
 	"reflect"
 	"strings"
 
+	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const Version = "0.2.0"
+
+type Driver int
+
+const (
+	Mysql Driver = iota
+	Postgresql
+	Sqlite3
+	MicrosoftSqlServer
+)
 
 type Neorm struct {
 	Schema    string
@@ -21,14 +33,63 @@ type Neorm struct {
 	_User     string
 	_Password string
 	_Scope    string
+	_Rows     []map[string]interface{}
+	_Result   sql.Result
+	_Args     []any
+	_Driver   Driver
 }
 
 // database connectors:
 
-func (orm Neorm) Connect(connString string) (Neorm, error) {
-	db, err := sql.Open("mysql", connString)
-	if err != nil {
-		return Neorm{}, err
+func (orm Neorm) Connect(connString string, driver string) (Neorm, error) {
+	var db *sql.DB
+	var err error
+
+	switch strings.ToLower(driver) {
+	case "mysql", "mariadb":
+		db, err = sql.Open("mysql", connString)
+
+		if err != nil {
+			orm._Driver = Mysql
+			orm.Pool = db
+
+			return orm, nil
+		}
+	case "postgres", "postgresql", "pg", "pq":
+		db, err = sql.Open("postgres", connString)
+
+		if err != nil {
+			orm._Driver = Postgresql
+			orm.Pool = db
+
+			return orm, nil
+		}
+	case "sqlite", "sqlite3":
+		db, err = sql.Open("sqlite3", connString)
+
+		if err != nil {
+			orm._Driver = Sqlite3
+			orm.Pool = db
+
+			return orm, nil
+		}
+	case "mssql", "sqlserver", "microsoftsqlserver":
+		db, err = sql.Open("sqlserver", connString)
+
+		if err != nil {
+			orm._Driver = MicrosoftSqlServer
+			orm.Pool = db
+
+			return orm, nil
+		}
+	default:
+		db, err = sql.Open("mysql", connString)
+		if err != nil {
+			orm._Driver = Mysql
+			orm.Pool = db
+
+			return orm, nil
+		}
 	}
 
 	return Neorm{
@@ -39,10 +100,28 @@ func (orm Neorm) Connect(connString string) (Neorm, error) {
 	}, nil
 }
 
+func (orm *Neorm) getPlaceHolder() string {
+	switch orm._Driver {
+	case Mysql, Sqlite3:
+		return "?"
+	case Postgresql:
+		lengthOfArgs := len(orm._Args)
+
+		return fmt.Sprintf("$%d", lengthOfArgs)
+	case MicrosoftSqlServer:
+		lengthOfArgs := len(orm._Args)
+
+		return fmt.Sprintf("@p%d", lengthOfArgs)
+	default:
+		return "?"
+	}
+}
+
 func (orm *Neorm) Close() {
 	orm.Pool.Close()
 }
 
+// it's for queries that not get any feedback from if operation successfull. It doesn't do any preparations.
 func (orm *Neorm) QueryDrop() error {
 	ctx := context.Background()
 	getConn, err := orm.Pool.Conn(ctx)
@@ -78,12 +157,15 @@ type Row struct {
 	Columns map[string]interface{}
 }
 
-func (orm *Neorm) Execute() ([]map[string]interface{}, error) {
+func (orm *Neorm) Execute() error {
 	ctx := context.Background()
+
+	orm._Rows = nil
+	orm._Result = nil
 
 	newConn, err := orm.Pool.Conn(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer newConn.Close()
 
@@ -91,18 +173,18 @@ func (orm *Neorm) Execute() ([]map[string]interface{}, error) {
 		stmt, err := newConn.PrepareContext(ctx, orm.Query)
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		rows, err := stmt.Query()
+		rows, err := stmt.Query(orm._Args...)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		defer rows.Close()
 
 		columns, err := rows.Columns()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		values := make([]interface{}, len(columns))
@@ -116,7 +198,7 @@ func (orm *Neorm) Execute() ([]map[string]interface{}, error) {
 			err := rows.Scan(valuePtrs...)
 
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			rows := make(map[string]interface{})
@@ -138,24 +220,53 @@ func (orm *Neorm) Execute() ([]map[string]interface{}, error) {
 		}
 
 		if err = rows.Err(); err != nil {
-			return nil, err
+			return err
 		}
 
-		return results, nil
+		orm._Args = orm._Args[:0]
+		orm._Rows = results
 	} else {
 		stmt, err := newConn.PrepareContext(ctx, orm.Query)
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		_, err = stmt.ExecContext(ctx)
+		result, err := stmt.ExecContext(ctx, orm._Args...)
 
 		if err != nil {
-			return nil, err
-		} else {
-			return nil, nil
+			return err
 		}
+
+		orm._Args = orm._Args[:0]
+
+		orm._Result = result
+	}
+
+	return nil
+}
+
+func (orm *Neorm) Rows() ([]map[string]interface{}, error) {
+	return orm._Rows, nil
+}
+
+func (orm *Neorm) LastInsertId() (int64, error) {
+	lid, err := orm._Result.LastInsertId()
+
+	if err != nil {
+		return 0, err
+	} else {
+		return lid, nil
+	}
+}
+
+func (orm *Neorm) RowsAffected() (int64, error) {
+	ra, err := orm._Result.RowsAffected()
+
+	if err != nil {
+		return 0, err
+	} else {
+		return ra, nil
 	}
 }
 
@@ -929,50 +1040,35 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 	orm._Type = "i"
 	columnValues := "("
 
-	lengthOfColumns := len(columns)
 	for i, column := range columns {
-		if i+1 != lengthOfColumns {
-			columnValues = fmt.Sprintf("%s%s, ", columnValues, column)
+		if i == 0 {
+			columnValues = fmt.Sprintf("%s%s", columnValues, column)
 		} else {
-			columnValues = fmt.Sprintf("%s%s)", columnValues, column)
+			columnValues = fmt.Sprintf("%si %s)", columnValues, column)
 		}
 	}
+
+	columnValues = columnValues + ")"
 
 	newValues := "("
 
 	if slice, ok := values.([]interface{}); ok {
-		lengthOfValues := len(slice)
-
 		for i, value := range slice {
-			if i+1 != lengthOfValues {
-				switch t := value.(type) {
-				case string, map[string]interface{}:
-					newValues = fmt.Sprintf("%s'%s', ", newValues, t)
-				case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-					newValues = fmt.Sprintf("%s%d, ", newValues, t)
-				case float32, float64:
-					newValues = fmt.Sprintf("%s%f, ", newValues, t)
-				case bool:
-					newValues = fmt.Sprintf("%s%v, ", newValues, t)
-				}
+			orm._Args = append(orm._Args, value)
+
+			p := orm.getPlaceHolder()
+
+			if i == 0 {
+				newValues = fmt.Sprintf("%s%s", newValues, p)
 			} else {
-				switch t := value.(type) {
-				case string, map[string]interface{}:
-					newValues = fmt.Sprintf("%s'%s')", newValues, t)
-				case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-					newValues = fmt.Sprintf("%s%d)", newValues, value)
-				case float32, float64:
-					newValues = fmt.Sprintf("%s%f)", newValues, value)
-				case bool:
-					newValues = fmt.Sprintf("%s%v)", newValues, value)
-				}
+				newValues = fmt.Sprintf("%s, %s", newValues, p)
 			}
 		}
 	} else {
 		panic("values argument should be a slice.")
 	}
 
-	orm.Query = fmt.Sprintf("INSERT INTO %s VALUES %s", columnValues, newValues)
+	orm.Query = fmt.Sprintf("INSERT INTO %s VALUES %s)", columnValues, newValues)
 
 	return *orm
 }
@@ -1006,83 +1102,82 @@ func (orm *Neorm) Table(table string) Neorm {
 }
 
 func (orm *Neorm) Where(column, mark string, value interface{}) Neorm {
-	switch t := value.(type) {
-	case string, map[string]interface{}:
-		orm.Query = fmt.Sprintf("%s WHERE %s %s '%s'", orm.Query, column, mark, t)
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		orm.Query = fmt.Sprintf("%s WHERE %s %s %d", orm.Query, column, mark, t)
-	case float32, float64:
-		orm.Query = fmt.Sprintf("%s WHERE %s %s %f", orm.Query, column, mark, t)
-	case bool:
-		orm.Query = fmt.Sprintf("%s WHERE %s %s %v", orm.Query, column, mark, t)
-	default:
-		orm.Query = fmt.Sprintf("%s WHERE %s %s %s", orm.Query, column, mark, t)
+	if value != nil {
+		orm._Args = append(orm._Args, value)
+
+		p := orm.getPlaceHolder()
+
+		orm.Query = fmt.Sprintf("%s WHERE %s %s %s", orm.Query, column, mark, p)
+	} else {
+		switch mark {
+		case "=":
+			orm.Query = fmt.Sprintf("%s WHERE %s IS NULL", orm.Query, column)
+		case "!=", "<>":
+			orm.Query = fmt.Sprintf("%s WHERE %s IS NOT NULL", orm.Query, column)
+		default:
+			panic("Invalid operator for NULL value")
+		}
 	}
 
 	return *orm
 }
 
 func (orm *Neorm) Or(column, mark string, value interface{}) Neorm {
-	switch t := value.(type) {
-	case string, map[string]interface{}:
-		orm.Query = fmt.Sprintf("%s OR %s %s '%s'", orm.Query, column, mark, t)
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		orm.Query = fmt.Sprintf("%s OR %s %s %d", orm.Query, column, mark, t)
-	case float32, float64:
-		orm.Query = fmt.Sprintf("%s OR %s %s %f", orm.Query, column, mark, t)
-	case bool:
-		orm.Query = fmt.Sprintf("%s OR %s %s %v", orm.Query, column, mark, t)
-	default:
-		orm.Query = fmt.Sprintf("%s OR %s %s %s", orm.Query, column, mark, t)
+	if value != nil {
+		orm._Args = append(orm._Args, value)
+
+		p := orm.getPlaceHolder()
+
+		orm.Query = fmt.Sprintf("%s OR %s %s %s", orm.Query, column, mark, p)
+	} else {
+		switch mark {
+		case "=":
+			orm.Query = fmt.Sprintf("%s OR %s IS NULL", orm.Query, column)
+		case "!=", "<>":
+			orm.Query = fmt.Sprintf("%s OR %s IS NOT NULL", orm.Query, column)
+		default:
+			panic("Invalid operator for NULL value")
+		}
 	}
 
 	return *orm
 }
 
 func (orm *Neorm) And(column, mark string, value interface{}) Neorm {
-	switch t := value.(type) {
-	case string, map[string]interface{}:
-		orm.Query = fmt.Sprintf("%s AND %s %s '%s'", orm.Query, column, mark, t)
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		orm.Query = fmt.Sprintf("%s AND %s %s %d", orm.Query, column, mark, t)
-	case float32, float64:
-		orm.Query = fmt.Sprintf("%s AND %s %s %f", orm.Query, column, mark, t)
-	case bool:
-		orm.Query = fmt.Sprintf("%s AND %s %s %v", orm.Query, column, mark, t)
-	default:
-		orm.Query = fmt.Sprintf("%s AND %s %s %s", orm.Query, column, mark, t)
+	if value != nil {
+		orm._Args = append(orm._Args, value)
+
+		p := orm.getPlaceHolder()
+
+		orm.Query = fmt.Sprintf("%s AND %s %s %s", orm.Query, column, mark, p)
+	} else {
+		switch mark {
+		case "=":
+			orm.Query = fmt.Sprintf("%s AND %s IS NULL", orm.Query, column)
+		case "!=", "<>":
+			orm.Query = fmt.Sprintf("%s AND %s IS NOT NULL", orm.Query, column)
+		default:
+			panic("Invalid operator for NULL value")
+		}
 	}
 
 	return *orm
 }
 
 func (orm *Neorm) Set(column string, value interface{}) Neorm {
-	if strings.Contains(orm.Query, "SET") {
-		switch t := value.(type) {
-		case string, map[string]interface{}:
-			orm.Query = fmt.Sprintf("%s, %s = '%s'", orm.Query, column, t)
-		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-			orm.Query = fmt.Sprintf("%s, %s = %d", orm.Query, column, t)
-		case float32, float64:
-			orm.Query = fmt.Sprintf("%s, %s = %f", orm.Query, column, t)
-		case bool:
-			orm.Query = fmt.Sprintf("%s, %s = %v", orm.Query, column, t)
-		default:
-			orm.Query = fmt.Sprintf("%s, %s = %s", orm.Query, column, t)
-		}
+	var p string
+
+	if value != nil {
+		orm._Args = append(orm._Args, value)
+		p = orm.getPlaceHolder()
 	} else {
-		switch t := value.(type) {
-		case string, map[string]interface{}:
-			orm.Query = fmt.Sprintf("%s SET %s = '%s'", orm.Query, column, t)
-		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-			orm.Query = fmt.Sprintf("%s SET %s = %d", orm.Query, column, t)
-		case float32, float64:
-			orm.Query = fmt.Sprintf("%s SET %s = %f", orm.Query, column, t)
-		case bool:
-			orm.Query = fmt.Sprintf("%s SET %s = %v", orm.Query, column, t)
-		default:
-			orm.Query = fmt.Sprintf("%s SET %s = %s", orm.Query, column, t)
-		}
+		p = "NULL"
+	}
+
+	if strings.Contains(orm.Query, "SET") {
+		orm.Query = fmt.Sprintf("%s, %s = %s", orm.Query, column, p)
+	} else {
+		orm.Query = fmt.Sprintf("%s SET %s = %s", orm.Query, column, p)
 	}
 
 	return *orm
@@ -1090,20 +1185,123 @@ func (orm *Neorm) Set(column string, value interface{}) Neorm {
 
 func (orm *Neorm) Like(columns []string, operand string) Neorm {
 	for i, column := range columns {
+		orm._Args = append(orm._Args, operand)
+
+		p := orm.getPlaceHolder()
+
 		if i == 0 {
-			orm.Query = fmt.Sprintf("%s WHERE %s LIKE '", orm.Query, column)
-			orm.Query = orm.Query + "%"
-			orm.Query = orm.Query + operand
-			orm.Query = orm.Query + "%"
-			orm.Query = orm.Query + "'"
+			orm.Query = fmt.Sprintf("%s WHERE %s LIKE %s", orm.Query, column, p)
 		} else {
-			orm.Query = fmt.Sprintf("%s OR %s LIKE '", orm.Query, column)
-			orm.Query = orm.Query + "%"
-			orm.Query = orm.Query + operand
-			orm.Query = orm.Query + "%"
-			orm.Query = orm.Query + "'"
+			orm.Query = fmt.Sprintf("%s OR %s LIKE %s", orm.Query, column, p)
 		}
 	}
+
+	return *orm
+}
+
+func (orm *Neorm) In(inType string, column string, values []any) Neorm {
+	switch strings.ToLower(inType) {
+	case "where":
+		orm.Query = fmt.Sprintf("%s WHERE %s IN(", orm.Query, column)
+	case "and":
+		orm.Query = fmt.Sprintf("%s AND %s IN(", orm.Query, column)
+	case "or":
+		orm.Query = fmt.Sprintf("%s OR %s IN(", orm.Query, column)
+	}
+
+	for i, value := range values {
+		orm._Args = append(orm._Args, value)
+
+		p := orm.getPlaceHolder()
+
+		if i == 0 {
+			orm.Query = fmt.Sprintf("%s%s", orm.Query, p)
+		} else {
+			orm.Query = fmt.Sprintf("%s, %s", orm.Query, p)
+		}
+	}
+
+	orm.Query = orm.Query + ")"
+
+	return *orm
+}
+
+func (orm *Neorm) NotIn(inType string, column string, values []any) Neorm {
+	switch strings.ToLower(inType) {
+	case "where":
+		orm.Query = fmt.Sprintf("%s WHERE %s NOT IN(", orm.Query, column)
+	case "and":
+		orm.Query = fmt.Sprintf("%s AND %s NOT IN(", orm.Query, column)
+	case "or":
+		orm.Query = fmt.Sprintf("%s OR %s NOT IN(", orm.Query, column)
+	}
+
+	for i, value := range values {
+		orm._Args = append(orm._Args, value)
+
+		p := orm.getPlaceHolder()
+
+		if i == 0 {
+			orm.Query = fmt.Sprintf("%s%s", orm.Query, p)
+		} else {
+			orm.Query = fmt.Sprintf("%s, %s", orm.Query, p)
+		}
+	}
+
+	orm.Query = orm.Query + ")"
+
+	return *orm
+}
+
+func (orm *Neorm) InnerJoin(table string, left string, mark string, right string) Neorm {
+	orm.Query = fmt.Sprintf("%s INNER JOIN %s ON %s %s %s", orm.Query, table, left, mark, right)
+
+	return *orm
+}
+
+func (orm *Neorm) LeftJoin(table string, left string, mark string, right string) Neorm {
+	orm.Query = fmt.Sprintf("%s LEFT JOIN %s ON %s %s %s", orm.Query, table, left, mark, right)
+
+	return *orm
+}
+
+func (orm *Neorm) RightJoin(table string, left string, mark string, right string) Neorm {
+	orm.Query = fmt.Sprintf("%s INNER JOIN %s ON %s %s %s", orm.Query, table, left, mark, right)
+
+	return *orm
+}
+
+func (orm *Neorm) NaturalJoin(table string) Neorm {
+	orm.Query = fmt.Sprintf("%s NATURAL JOIN %s", orm.Query, table)
+
+	return *orm
+}
+
+func (orm *Neorm) CrossJoin(table string) Neorm {
+	orm.Query = fmt.Sprintf("%s CROSS JOIN %s", orm.Query, table)
+
+	return *orm
+}
+
+func (orm *Neorm) OpenParenthesis(parenthesisType string) Neorm {
+	upperType := strings.ToUpper(parenthesisType)
+
+	switch upperType {
+	case "WHERE", "AND", "OR":
+		orm.Query = fmt.Sprintf("%s %s (", orm.Query, upperType)
+	default:
+		panic("For now, only WHERE, AND, OR operators supported for opening parenthesis.")
+	}
+
+	return *orm
+}
+
+func (orm *Neorm) CloseParenthesis() Neorm {
+	if !strings.ContainsAny(orm.Query, "(") {
+		panic("You're not opened a parenthesis, you cannot close one!")
+	}
+
+	orm.Query = orm.Query + ")"
 
 	return *orm
 }
@@ -1116,6 +1314,16 @@ func (orm *Neorm) OrderBy(column, ordering string) Neorm {
 		orm.Query = fmt.Sprintf("%s ORDER BY %s DESC", orm.Query, column)
 	default:
 		panic("Error on OrderBy method: ordering should be either ASC or DESC.")
+	}
+
+	return *orm
+}
+
+func (orm *Neorm) OrderByField(column string, values []string) Neorm {
+	orm.Query = fmt.Sprintf("%s ORDER BY FIELD(%s, )", orm.Query, column)
+
+	for _, value := range values {
+		orm.Query = fmt.Sprintf("%s%s", orm.Query, value)
 	}
 
 	return *orm
