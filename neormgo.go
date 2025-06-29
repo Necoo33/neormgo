@@ -1335,10 +1335,38 @@ func (orm *Neorm) OrderRandom() Neorm {
 	return *orm
 }
 
-func (orm *Neorm) Length(table string) Neorm {
+func (orm *Neorm) Length(table string) (int64, error) {
 	orm.Query = fmt.Sprintf("SELECT COUNT(*) AS length FROM %s", table)
 
-	return *orm
+	ctx := context.Background()
+
+	newConn, err := orm.Pool.Conn(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer newConn.Close()
+
+	stmt, err := newConn.PrepareContext(ctx, orm.Query)
+
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := stmt.Query()
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		var count int64
+		if err := rows.Scan(&count); err != nil {
+			return 0, err
+		}
+		return count, nil
+	}
+
+	return 0, fmt.Errorf("no rows returned")
 }
 
 func (orm *Neorm) Limit(limit int) Neorm {

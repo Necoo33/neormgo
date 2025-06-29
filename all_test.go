@@ -61,3 +61,26 @@ func TestSelect(t *testing.T) {
 
 	fmt.Printf("Here is a random data: %v\n", rows[0]["name"])
 }
+
+func TestLength(t *testing.T) {
+	err := godotenv.Load(".env")
+	if err != nil {
+		t.Fatalf("`.env` dosyası yüklenemedi: %s", err)
+	}
+
+	db := Neorm{}
+	dbConnURL := os.Getenv("DB_CONN_URL")
+
+	db, err = db.Connect(dbConnURL, "mysql")
+	if err != nil {
+		t.Fatalf("Connect başarısız: %s", err)
+	}
+
+	length, err := db.Length("users")
+
+	if err != nil {
+		t.Fatalf("Error occured when we try to fetch data: %s", err)
+	}
+
+	fmt.Printf("Here is your rows length: %d\n", length)
+}
