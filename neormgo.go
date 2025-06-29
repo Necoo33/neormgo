@@ -37,6 +37,7 @@ type Neorm struct {
 	_Result   sql.Result
 	_Args     []any
 	_Driver   Driver
+	_Count    int64
 }
 
 // database connectors:
@@ -162,6 +163,7 @@ func (orm *Neorm) Execute() error {
 
 	orm._Rows = nil
 	orm._Result = nil
+	orm._Count = -1
 
 	newConn, err := orm.Pool.Conn(ctx)
 	if err != nil {
@@ -225,6 +227,27 @@ func (orm *Neorm) Execute() error {
 
 		orm._Args = orm._Args[:0]
 		orm._Rows = results
+	} else if orm._Type == "l" {
+		stmt, err := newConn.PrepareContext(ctx, orm.Query)
+
+		if err != nil {
+			return err
+		}
+
+		rows, err := stmt.Query(orm._Args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		if rows.Next() {
+			var count int64
+			if err := rows.Scan(&count); err != nil {
+				return err
+			}
+
+			orm._Count = count
+		}
 	} else {
 		stmt, err := newConn.PrepareContext(ctx, orm.Query)
 
@@ -248,6 +271,10 @@ func (orm *Neorm) Execute() error {
 
 func (orm *Neorm) Rows() ([]map[string]interface{}, error) {
 	return orm._Rows, nil
+}
+
+func (orm *Neorm) Length() int64 {
+	return orm._Count
 }
 
 func (orm *Neorm) LastInsertId() (int64, error) {
@@ -1335,38 +1362,12 @@ func (orm *Neorm) OrderRandom() Neorm {
 	return *orm
 }
 
-func (orm *Neorm) Length(table string) (int64, error) {
+func (orm *Neorm) Count(table string) Neorm {
 	orm.Query = fmt.Sprintf("SELECT COUNT(*) AS length FROM %s", table)
 
-	ctx := context.Background()
+	orm._Type = "l"
 
-	newConn, err := orm.Pool.Conn(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer newConn.Close()
-
-	stmt, err := newConn.PrepareContext(ctx, orm.Query)
-
-	if err != nil {
-		return 0, err
-	}
-
-	rows, err := stmt.Query()
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var count int64
-		if err := rows.Scan(&count); err != nil {
-			return 0, err
-		}
-		return count, nil
-	}
-
-	return 0, fmt.Errorf("no rows returned")
+	return *orm
 }
 
 func (orm *Neorm) Limit(limit int) Neorm {

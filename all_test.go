@@ -76,11 +76,15 @@ func TestLength(t *testing.T) {
 		t.Fatalf("Connect başarısız: %s", err)
 	}
 
-	length, err := db.Length("users")
+	length := db.Count("users")
+	length.Where("id", ">", 10)
+	err = length.Execute()
 
 	if err != nil {
 		t.Fatalf("Error occured when we try to fetch data: %s", err)
 	}
 
-	fmt.Printf("Here is your rows length: %d\n", length)
+	lengthOfUsers := length.Length()
+
+	fmt.Printf("Here is your rows length: %d\n", lengthOfUsers)
 }
