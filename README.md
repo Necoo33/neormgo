@@ -1,4 +1,4 @@
-# Neorm Go - All-in-one mysql orm
+# Neorm Go - All-in-one orm
 
 Neorm Go is a imperative orm that makes you imperatively build and execute queries.
 
@@ -100,7 +100,7 @@ insert.Execute()
 lid, err := insert.LastInsertId()
 
 if err != nil {
-
+// error checking  
 }
 
 ```
@@ -116,6 +116,12 @@ database.Where("id", "=", 1)
 database.Finish()
 database.Execute()
 
+ra, err := insert.RowsAffected()
+
+if err != nil {
+// error checking  
+}
+
 ```
 
 #### Delete Query
@@ -127,6 +133,12 @@ database.Table("blogs")
 database.Where("id", "=", 10)
 database.Finish()
 database.Execute()
+
+ra, err := insert.RowsAffected()
+
+if err != nil {
+// error checking  
+}
 
 ```
 
