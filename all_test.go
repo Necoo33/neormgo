@@ -8,6 +8,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// change these variables to test your own database:
+
+var database = "mysql"
+var table = "users"
+var randomColumn = "name"
+var resultAlias = "@result"
+
 func TestConnection(t *testing.T) {
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -17,7 +24,7 @@ func TestConnection(t *testing.T) {
 	db := Neorm{}
 	dbConnURL := os.Getenv("DB_CONN_URL")
 
-	db, err = db.Connect(dbConnURL, "mysql")
+	db, err = db.Connect(dbConnURL, database)
 	if err != nil {
 		t.Fatalf("Connect başarısız: %s", err)
 	}
@@ -36,13 +43,13 @@ func TestSelect(t *testing.T) {
 	db := Neorm{}
 	dbConnURL := os.Getenv("DB_CONN_URL")
 
-	db, err = db.Connect(dbConnURL, "mysql")
+	db, err = db.Connect(dbConnURL, database)
 	if err != nil {
 		t.Fatalf("Connect başarısız: %s", err)
 	}
 
 	database := db.Select("*")
-	database.Table("users")
+	database.Table(table)
 	database.Finish()
 
 	err = database.Execute()
@@ -59,7 +66,7 @@ func TestSelect(t *testing.T) {
 
 	fmt.Printf("Here is your rows count: %d\n", len(rows))
 
-	fmt.Printf("Here is a random data: %v\n", rows[0]["name"])
+	fmt.Printf("Here is a random data: %v\n", rows[0][randomColumn])
 }
 
 func TestLength(t *testing.T) {
@@ -71,12 +78,12 @@ func TestLength(t *testing.T) {
 	db := Neorm{}
 	dbConnURL := os.Getenv("DB_CONN_URL")
 
-	db, err = db.Connect(dbConnURL, "mysql")
+	db, err = db.Connect(dbConnURL, database)
 	if err != nil {
 		t.Fatalf("Connect başarısız: %s", err)
 	}
 
-	length := db.Count("users")
+	length := db.Count(table)
 	length.Where("id", ">", 10)
 	err = length.Execute()
 
