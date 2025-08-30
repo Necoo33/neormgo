@@ -25,19 +25,20 @@ const (
 )
 
 type Neorm struct {
-	Schema    string
-	Query     string
-	_Table    string
-	Pool      *sql.DB
-	_Type     string
-	_User     string
-	_Password string
-	_Scope    string
-	_Rows     []map[string]interface{}
-	_Result   sql.Result
-	_Args     []any
-	_Driver   Driver
-	_Count    int64
+	Schema       string
+	Query        string
+	_Table       string
+	Pool         *sql.DB
+	_Type        string
+	_User        string
+	_Password    string
+	_Scope       string
+	_Rows        []map[string]interface{}
+	_Result      sql.Result
+	_Args        []any
+	_Driver      Driver
+	_Count       int64
+	_ResultAlias string
 }
 
 // database connectors:
@@ -247,6 +248,90 @@ func (orm *Neorm) Execute() error {
 			}
 
 			orm._Count = count
+		}
+	} else if orm._Type == "c" {
+		stmt, err := newConn.PrepareContext(ctx, orm.Query)
+
+		if err != nil {
+			return err
+		}
+
+		result, err := stmt.ExecContext(ctx, orm._Args...)
+
+		if err != nil {
+			return err
+		}
+
+		if orm._ResultAlias != "" {
+			resultAliasWithoutAt := strings.TrimPrefix(orm._ResultAlias, "@")
+
+			stmt, err := newConn.PrepareContext(ctx, fmt.Sprintf("SELECT %s AS %s", orm._ResultAlias, resultAliasWithoutAt))
+
+			if err != nil {
+				return err
+			}
+
+			rows, err := stmt.Query(orm._Args...)
+
+			if err != nil {
+				return err
+			}
+
+			defer rows.Close()
+
+			columns, err := rows.Columns()
+			if err != nil {
+				return err
+			}
+
+			values := make([]interface{}, len(columns))
+			valuePtrs := make([]interface{}, len(columns))
+			for i := range columns {
+				valuePtrs[i] = &values[i]
+			}
+
+			var results []map[string]interface{}
+			for rows.Next() {
+				err := rows.Scan(valuePtrs...)
+
+				if err != nil {
+					return err
+				}
+
+				rows := make(map[string]interface{})
+				for i, col := range columns {
+					var v interface{}
+					val := values[i]
+
+					b, ok := val.([]byte)
+					if ok {
+						v = string(b)
+					} else {
+						v = val
+					}
+
+					rows[col] = v
+				}
+
+				results = append(results, rows)
+			}
+
+			if err = rows.Err(); err != nil {
+				return err
+			}
+
+			orm._Args = orm._Args[:0]
+			orm._Rows = results
+
+			orm._ResultAlias = ""
+
+			defer rows.Close()
+		} else {
+			orm._Args = orm._Args[:0]
+
+			orm._ResultAlias = ""
+
+			orm._Result = result
 		}
 	} else {
 		stmt, err := newConn.PrepareContext(ctx, orm.Query)
@@ -1112,6 +1197,27 @@ func (orm *Neorm) Delete() Neorm {
 	orm._Table = ""
 	orm._Type = "u"
 	orm.Query = "DELETE FROM"
+
+	return *orm
+}
+
+func (orm *Neorm) Call(procedure, resultAlias string, args ...interface{}) Neorm {
+	orm._Type = "c"
+	orm._Table = ""
+	orm.Query = fmt.Sprintf("CALL %s(", procedure)
+	orm._ResultAlias = resultAlias
+
+	placeholder := orm.getPlaceHolder()
+
+	for i, arg := range args {
+		orm._Args = append(orm._Args, arg)
+
+		if i+1 != len(args) {
+			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
+		} else {
+			orm.Query = fmt.Sprintf("%s%s)", orm.Query, placeholder)
+		}
+	}
 
 	return *orm
 }
