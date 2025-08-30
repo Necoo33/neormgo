@@ -2,10 +2,14 @@
 -- This file creates the database, tables, seeds data, and stored procedures
 
 -- 1. Create the database
+DROP DATABASE IF EXISTS neormgo_test;
 CREATE DATABASE neormgo_test;
 
 -- Connect to the database (you'll need to run \c neormgo_test; in psql after creating the database)
--- \c neormgo_test;
+\c neormgo_test;
+
+DROP TABLE IF EXISTS users CASCADE;
+DROP PROCEDURE IF EXISTS get_mock_result;
 
 -- 2. Create users table with name, age, height columns
 CREATE TABLE IF NOT EXISTS users (
@@ -23,30 +27,10 @@ INSERT INTO users (name, age, height) VALUES
     ('Sarah Wilson', 22, 168.20),
     ('David Brown', 35, 172.80);
 
--- 4. Create a mock stored procedure (function in PostgreSQL) that returns 1
 CREATE OR REPLACE FUNCTION get_mock_result()
-RETURNS TABLE(result INTEGER) AS $$
-DECLARE
-    mock_result INTEGER := 1;
+RETURNS TABLE(result int) AS $$
 BEGIN
-    RETURN QUERY SELECT mock_result;
-END;
-$$ LANGUAGE plpgsql;
-
--- Alternative version that sets a session variable (closest to MySQL @result)
-CREATE OR REPLACE FUNCTION set_mock_result()
-RETURNS INTEGER AS $$
-BEGIN
-    -- Set a custom setting (session variable equivalent)
-    PERFORM set_config('custom.result', '1', false);
-    RETURN 1;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to get the session variable
-CREATE OR REPLACE FUNCTION get_session_result()
-RETURNS INTEGER AS $$
-BEGIN
-    RETURN COALESCE(current_setting('custom.result', true)::INTEGER, 0);
+    RETURN QUERY
+    SELECT 1 AS result;
 END;
 $$ LANGUAGE plpgsql;

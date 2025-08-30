@@ -24,7 +24,7 @@ INSERT INTO `users` (`name`, `age`, `height`) VALUES
 -- 4. Create a mock stored procedure that returns 1 with @result variable
 DELIMITER //
 
-CREATE PROCEDURE GetMockResult()
+CREATE PROCEDURE get_mock_result()
 BEGIN
     SET @result = 1;
     SELECT @result AS result;

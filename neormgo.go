@@ -13,7 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 type Driver int
 
@@ -39,67 +39,58 @@ type Neorm struct {
 	_Driver      Driver
 	_Count       int64
 	_ResultAlias string
+	_Procedure   string
 }
 
 // database connectors:
 
-func (orm Neorm) Connect(connString string, driver string) (Neorm, error) {
+func (orm *Neorm) Connect(connString string, driver string) (Neorm, error) {
 	var db *sql.DB
 	var err error
 
 	switch strings.ToLower(driver) {
 	case "mysql", "mariadb":
 		db, err = sql.Open("mysql", connString)
-
 		if err != nil {
-			orm._Driver = Mysql
-			orm.Pool = db
-
-			return orm, nil
+			return Neorm{}, err
 		}
+		orm._Driver = Mysql
+		orm.Pool = db
+
 	case "postgres", "postgresql", "pg", "pq":
 		db, err = sql.Open("postgres", connString)
-
 		if err != nil {
-			orm._Driver = Postgresql
-			orm.Pool = db
-
-			return orm, nil
+			return Neorm{}, err
 		}
+		orm._Driver = Postgresql
+		orm.Pool = db
+
 	case "sqlite", "sqlite3":
 		db, err = sql.Open("sqlite3", connString)
-
 		if err != nil {
-			orm._Driver = Sqlite3
-			orm.Pool = db
-
-			return orm, nil
+			return Neorm{}, err
 		}
+		orm._Driver = Sqlite3
+		orm.Pool = db
+
 	case "mssql", "sqlserver", "microsoftsqlserver":
 		db, err = sql.Open("sqlserver", connString)
-
 		if err != nil {
-			orm._Driver = MicrosoftSqlServer
-			orm.Pool = db
-
-			return orm, nil
+			return Neorm{}, err
 		}
+		orm._Driver = MicrosoftSqlServer
+		orm.Pool = db
+
 	default:
 		db, err = sql.Open("mysql", connString)
 		if err != nil {
-			orm._Driver = Mysql
-			orm.Pool = db
-
-			return orm, nil
+			return Neorm{}, err
 		}
+		orm._Driver = Mysql
+		orm.Pool = db
 	}
 
-	return Neorm{
-		Pool:   db,
-		Query:  "",
-		_Table: "",
-		Schema: "",
-	}, nil
+	return *orm, nil
 }
 
 func (orm *Neorm) getPlaceHolder() string {
@@ -256,7 +247,7 @@ func (orm *Neorm) Execute() error {
 			return err
 		}
 
-		result, err := stmt.ExecContext(ctx, orm._Args...)
+		_, err = stmt.ExecContext(ctx, orm._Args...)
 
 		if err != nil {
 			return err
@@ -265,7 +256,15 @@ func (orm *Neorm) Execute() error {
 		if orm._ResultAlias != "" {
 			resultAliasWithoutAt := strings.TrimPrefix(orm._ResultAlias, "@")
 
-			stmt, err := newConn.PrepareContext(ctx, fmt.Sprintf("SELECT %s AS %s", orm._ResultAlias, resultAliasWithoutAt))
+			var return_val_selector_query string
+			switch orm._Driver {
+			case Mysql:
+				return_val_selector_query = fmt.Sprintf("SELECT %s AS %s", orm._ResultAlias, resultAliasWithoutAt)
+			case Postgresql:
+				return_val_selector_query = fmt.Sprintf("SELECT %s() AS %s", orm._Procedure, resultAliasWithoutAt)
+			}
+
+			stmt, err := newConn.PrepareContext(ctx, return_val_selector_query)
 
 			if err != nil {
 				return err
@@ -331,7 +330,7 @@ func (orm *Neorm) Execute() error {
 
 			orm._ResultAlias = ""
 
-			orm._Result = result
+			orm._Rows = []map[string]interface{}{}
 		}
 	} else {
 		stmt, err := newConn.PrepareContext(ctx, orm.Query)
@@ -1201,11 +1200,29 @@ func (orm *Neorm) Delete() Neorm {
 	return *orm
 }
 
-func (orm *Neorm) Call(procedure, resultAlias string, args ...interface{}) Neorm {
+func (orm *Neorm) Call(callType, procedure, resultAlias string, args ...interface{}) Neorm {
+	orm._Procedure = procedure
 	orm._Type = "c"
 	orm._Table = ""
-	orm.Query = fmt.Sprintf("CALL %s(", procedure)
-	orm._ResultAlias = resultAlias
+
+	switch callType {
+	case "procedure", "proc", "p", "pr":
+		orm.Query = fmt.Sprintf("CALL %s(", procedure)
+	case "function", "func", "f":
+		switch orm._Driver {
+		case Postgresql:
+			orm.Query = fmt.Sprintf("SELECT %s(", procedure)
+		case Mysql:
+			orm.Query = fmt.Sprintf("CALL %s(", procedure)
+		}
+
+	}
+
+	if resultAlias != "" {
+		if !strings.HasPrefix(resultAlias, "@") {
+			orm._ResultAlias = "@" + resultAlias
+		}
+	}
 
 	placeholder := orm.getPlaceHolder()
 
@@ -1215,9 +1232,11 @@ func (orm *Neorm) Call(procedure, resultAlias string, args ...interface{}) Neorm
 		if i+1 != len(args) {
 			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
 		} else {
-			orm.Query = fmt.Sprintf("%s%s)", orm.Query, placeholder)
+			orm.Query = fmt.Sprintf("%s%s", orm.Query, placeholder)
 		}
 	}
+
+	orm.Query = orm.Query + ")"
 
 	return *orm
 }
