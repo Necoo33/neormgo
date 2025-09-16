@@ -9,7 +9,8 @@ CREATE DATABASE neormgo_test;
 \c neormgo_test;
 
 DROP TABLE IF EXISTS users CASCADE;
-DROP PROCEDURE IF EXISTS get_mock_result;
+DROP PROCEDURE IF EXISTS get_mock_result_proc;
+DROP FUNCTION IF EXISTS get_mock_result;
 
 -- 2. Create users table with name, age, height columns
 CREATE TABLE IF NOT EXISTS users (
@@ -34,3 +35,11 @@ BEGIN
     SELECT 1 AS result;
 END;
 $$ LANGUAGE plpgsql;
+
+-- we need to test this for also postgres.
+CREATE OR REPLACE PROCEDURE get_mock_result_proc(OUT result int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    result := 1;
+END;
+$$;

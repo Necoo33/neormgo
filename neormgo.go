@@ -29,6 +29,7 @@ type Neorm struct {
 	Query        string
 	_Table       string
 	Pool         *sql.DB
+	Tx           *sql.Tx
 	_Type        string
 	_User        string
 	_Password    string
@@ -93,6 +94,45 @@ func (orm *Neorm) Connect(connString string, driver string) (Neorm, error) {
 	return *orm, nil
 }
 
+func (orm *Neorm) Begin() error {
+	if orm.Pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	tx, err := orm.Pool.Begin()
+
+	if err != nil {
+		return err
+	}
+
+	orm.Tx = tx
+
+	return nil
+}
+
+func (orm *Neorm) Rollback() error {
+	if orm.Tx == nil {
+		return fmt.Errorf("no active transaction")
+	}
+
+	err := orm.Tx.Rollback()
+
+	orm.Tx = nil
+	return err
+}
+
+func (orm *Neorm) Commit() error {
+	if orm.Tx == nil {
+		return fmt.Errorf("no active transaction")
+	}
+
+	err := orm.Tx.Commit()
+
+	orm.Tx = nil
+
+	return err
+}
+
 func (orm *Neorm) getPlaceHolder() string {
 	switch orm._Driver {
 	case Mysql, Sqlite3:
@@ -117,31 +157,51 @@ func (orm *Neorm) Close() {
 // it's for queries that not get any feedback from if operation successfull. It doesn't do any preparations.
 func (orm *Neorm) QueryDrop() error {
 	ctx := context.Background()
-	getConn, err := orm.Pool.Conn(ctx)
 
-	if err != nil {
-		fmt.Println("Error when getting new connection from pool!")
-		return err
-	}
+	if orm.Tx != nil {
+		if strings.HasPrefix(orm.Query, "CREATE TABLE") && orm.Schema != "" {
+			useTable := fmt.Sprintf("USE %s;", orm.Schema)
+			_, err := orm.Tx.ExecContext(ctx, useTable)
 
-	if strings.HasPrefix(orm.Query, "CREATE TABLE") && orm.Schema != "" {
-		useTable := fmt.Sprintf("USE %s;", orm.Schema)
-		_, err = getConn.ExecContext(ctx, useTable)
+			if err != nil {
+				fmt.Println("Error When Executing Use Query!")
+				return err
+			}
+		}
+
+		_, err := orm.Tx.ExecContext(ctx, orm.Query)
 
 		if err != nil {
-			fmt.Println("Error When Executing Use Query!")
+			fmt.Println("Error when executing QueryDrop!")
 			return err
 		}
+	} else {
+		getConn, err := orm.Pool.Conn(ctx)
+
+		if err != nil {
+			fmt.Println("Error when getting new connection from pool!")
+			return err
+		}
+
+		if strings.HasPrefix(orm.Query, "CREATE TABLE") && orm.Schema != "" {
+			useTable := fmt.Sprintf("USE %s;", orm.Schema)
+			_, err = getConn.ExecContext(ctx, useTable)
+
+			if err != nil {
+				fmt.Println("Error When Executing Use Query!")
+				return err
+			}
+		}
+
+		_, err = getConn.ExecContext(ctx, orm.Query)
+
+		if err != nil {
+			fmt.Println("Error when executing QueryDrop!")
+			return err
+		}
+
+		defer getConn.Close()
 	}
-
-	_, err = getConn.ExecContext(ctx, orm.Query)
-
-	if err != nil {
-		fmt.Println("Error when executing QueryDrop!")
-		return err
-	}
-
-	defer getConn.Close()
 
 	return nil
 }
@@ -157,19 +217,32 @@ func (orm *Neorm) Execute() error {
 	orm._Result = nil
 	orm._Count = -1
 
-	newConn, err := orm.Pool.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer newConn.Close()
+	var stmt *sql.Stmt
+	var newConn *sql.Conn
+	var err error
 
-	if orm._Type == "s" {
-		stmt, err := newConn.PrepareContext(ctx, orm.Query)
+	if orm.Tx != nil {
+		stmt, err = orm.Tx.PrepareContext(ctx, orm.Query)
 
 		if err != nil {
 			return err
 		}
+	} else {
+		newConn, err = orm.Pool.Conn(ctx)
+		if err != nil {
+			return err
+		}
 
+		defer newConn.Close()
+
+		stmt, err = newConn.PrepareContext(ctx, orm.Query)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	if orm._Type == "s" {
 		rows, err := stmt.Query(orm._Args...)
 		if err != nil {
 			return err
@@ -220,12 +293,6 @@ func (orm *Neorm) Execute() error {
 		orm._Args = orm._Args[:0]
 		orm._Rows = results
 	} else if orm._Type == "l" {
-		stmt, err := newConn.PrepareContext(ctx, orm.Query)
-
-		if err != nil {
-			return err
-		}
-
 		rows, err := stmt.Query(orm._Args...)
 		if err != nil {
 			return err
@@ -241,13 +308,7 @@ func (orm *Neorm) Execute() error {
 			orm._Count = count
 		}
 	} else if orm._Type == "c" {
-		stmt, err := newConn.PrepareContext(ctx, orm.Query)
-
-		if err != nil {
-			return err
-		}
-
-		_, err = stmt.ExecContext(ctx, orm._Args...)
+		_, err := stmt.ExecContext(ctx, orm._Args...)
 
 		if err != nil {
 			return err
@@ -264,7 +325,15 @@ func (orm *Neorm) Execute() error {
 				return_val_selector_query = fmt.Sprintf("SELECT %s() AS %s", orm._Procedure, resultAliasWithoutAt)
 			}
 
-			stmt, err := newConn.PrepareContext(ctx, return_val_selector_query)
+			if orm.Tx != nil {
+				stmt, err = orm.Tx.PrepareContext(ctx, return_val_selector_query)
+			} else {
+				stmt, err = newConn.PrepareContext(ctx, return_val_selector_query)
+
+				if err != nil {
+					return err
+				}
+			}
 
 			if err != nil {
 				return err
@@ -333,12 +402,6 @@ func (orm *Neorm) Execute() error {
 			orm._Rows = []map[string]interface{}{}
 		}
 	} else {
-		stmt, err := newConn.PrepareContext(ctx, orm.Query)
-
-		if err != nil {
-			return err
-		}
-
 		result, err := stmt.ExecContext(ctx, orm._Args...)
 
 		if err != nil {
