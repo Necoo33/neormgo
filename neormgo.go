@@ -14,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.3.1"
+const Version = "1.3.2"
 
 type Driver int
 
@@ -416,7 +416,31 @@ func (orm *Neorm) Execute() error {
 			if err := rows.Scan(&id); err != nil {
 				return err
 			}
-			orm._LastInsertIdForPostgresql = id.(string)
+
+			switch v := id.(type) {
+			case int64:
+				orm._LastInsertIdForPostgresql = strconv.FormatInt(v, 10)
+			case int32:
+				orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
+			case int16:
+				orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
+			case int8:
+				orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
+			case float64:
+				orm._LastInsertIdForPostgresql = strconv.FormatFloat(v, 'f', -1, 64)
+			case float32:
+				orm._LastInsertIdForPostgresql = strconv.FormatFloat(float64(v), 'f', -1, 64)
+			case bool:
+				orm._LastInsertIdForPostgresql = strconv.FormatBool(v)
+			case []byte:
+				orm._LastInsertIdForPostgresql = string(v)
+			case string:
+				orm._LastInsertIdForPostgresql = v
+			case nil:
+				orm._LastInsertIdForPostgresql = ""
+			default:
+				return fmt.Errorf("unexpected type: %T", v)
+			}
 		}
 
 		if err := rows.Err(); err != nil {
@@ -1211,6 +1235,7 @@ func (orm *Neorm) Select(columns interface{}) Neorm {
 	orm._Table = ""
 	orm.Query = ""
 	orm._Type = "s"
+	orm._Args = []any{}
 
 	switch t := columns.(type) {
 	case string:
@@ -1241,6 +1266,7 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 	orm.Query = ""
 	orm._Type = "i"
 	columnValues := "("
+	orm._Args = []any{}
 
 	for i, column := range columns {
 		if i == 0 {
@@ -1287,6 +1313,7 @@ func (orm *Neorm) Update() Neorm {
 	orm._Table = ""
 	orm._Type = "u"
 	orm.Query = "UPDATE"
+	orm._Args = []any{}
 
 	return *orm
 }
@@ -1295,6 +1322,7 @@ func (orm *Neorm) Delete() Neorm {
 	orm._Table = ""
 	orm._Type = "u"
 	orm.Query = "DELETE FROM"
+	orm._Args = []any{}
 
 	return *orm
 }
@@ -1303,6 +1331,7 @@ func (orm *Neorm) Call(callType, procedure, resultAlias string, args ...interfac
 	orm._Procedure = procedure
 	orm._Type = "c"
 	orm._Table = ""
+	orm._Args = []any{}
 
 	switch callType {
 	case "procedure", "proc", "p", "pr":
@@ -1323,10 +1352,10 @@ func (orm *Neorm) Call(callType, procedure, resultAlias string, args ...interfac
 		}
 	}
 
-	placeholder := orm.getPlaceHolder()
-
 	for i, arg := range args {
 		orm._Args = append(orm._Args, arg)
+
+		placeholder := orm.getPlaceHolder()
 
 		if i+1 != len(args) {
 			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
@@ -1587,9 +1616,11 @@ func (orm *Neorm) OrderRandom() Neorm {
 }
 
 func (orm *Neorm) Count(table string) Neorm {
-	orm.Query = fmt.Sprintf("SELECT COUNT(*) AS length FROM %s", table)
-
+	orm._Args = []any{}
+	orm._Table = ""
 	orm._Type = "l"
+
+	orm.Query = fmt.Sprintf("SELECT COUNT(*) AS length FROM %s", table)
 
 	return *orm
 }
