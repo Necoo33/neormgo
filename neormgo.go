@@ -13,7 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "0.3.0"
+const Version = "1.1.1"
 
 type Driver int
 
