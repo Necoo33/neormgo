@@ -14,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.2.1"
+const Version = "1.3.0"
 
 type Driver int
 
@@ -1271,6 +1271,12 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 	}
 
 	orm.Query = fmt.Sprintf("INSERT INTO %s VALUES %s)", columnValues, newValues)
+
+	return *orm
+}
+
+func (orm *Neorm) Returning(column string) Neorm {
+	orm.Query = fmt.Sprintf("%s RETURNING %s", orm.Query, column)
 
 	return *orm
 }
