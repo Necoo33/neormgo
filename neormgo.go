@@ -1276,7 +1276,9 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 }
 
 func (orm *Neorm) Returning(column string) Neorm {
-	orm.Query = fmt.Sprintf("%s RETURNING %s", orm.Query, column)
+	if orm._Driver == Postgresql {
+		orm.Query = fmt.Sprintf("%s RETURNING %s", orm.Query, column)
+	}
 
 	return *orm
 }
