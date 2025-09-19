@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	_ "github.com/denisenkom/go-mssqldb"
@@ -25,22 +26,23 @@ const (
 )
 
 type Neorm struct {
-	Schema       string
-	Query        string
-	_Table       string
-	Pool         *sql.DB
-	Tx           *sql.Tx
-	_Type        string
-	_User        string
-	_Password    string
-	_Scope       string
-	_Rows        []map[string]interface{}
-	_Result      sql.Result
-	_Args        []any
-	_Driver      Driver
-	_Count       int64
-	_ResultAlias string
-	_Procedure   string
+	Schema                     string
+	Query                      string
+	_Table                     string
+	Pool                       *sql.DB
+	Tx                         *sql.Tx
+	_Type                      string
+	_User                      string
+	_Password                  string
+	_Scope                     string
+	_Rows                      []map[string]interface{}
+	_Result                    sql.Result
+	_Args                      []any
+	_Driver                    Driver
+	_Count                     int64
+	_LastInsertIdForPostgresql string
+	_ResultAlias               string
+	_Procedure                 string
 }
 
 // database connectors:
@@ -401,6 +403,28 @@ func (orm *Neorm) Execute() error {
 
 			orm._Rows = []map[string]interface{}{}
 		}
+	} else if orm._Type == "i" {
+		rows, err := stmt.Query(orm._Args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		if rows.Next() {
+			// Tek satır ve tek sütun beklediğimiz için direkt alıyoruz
+			var id interface{}
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			orm._LastInsertIdForPostgresql = id.(string)
+		}
+
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// Artık gerek yok, args temizle
+		orm._Args = orm._Args[:0]
 	} else {
 		result, err := stmt.ExecContext(ctx, orm._Args...)
 
@@ -424,13 +448,17 @@ func (orm *Neorm) Length() int64 {
 	return orm._Count
 }
 
-func (orm *Neorm) LastInsertId() (int64, error) {
-	lid, err := orm._Result.LastInsertId()
-
-	if err != nil {
-		return 0, err
+func (orm *Neorm) LastInsertId() (string, error) {
+	if orm._Driver == Postgresql {
+		return orm._LastInsertIdForPostgresql, nil
 	} else {
-		return lid, nil
+		lid, err := orm._Result.LastInsertId()
+
+		if err != nil {
+			return "", err
+		} else {
+			return strconv.FormatInt(lid, 10), nil
+		}
 	}
 }
 
@@ -1218,7 +1246,7 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 		if i == 0 {
 			columnValues = fmt.Sprintf("%s%s", columnValues, column)
 		} else {
-			columnValues = fmt.Sprintf("%si %s)", columnValues, column)
+			columnValues = fmt.Sprintf("%s, %s", columnValues, column)
 		}
 	}
 
