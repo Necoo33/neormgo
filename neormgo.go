@@ -14,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.3.2"
+const Version = "1.3.3"
 
 type Driver int
 
@@ -1257,6 +1257,30 @@ func (orm *Neorm) Select(columns interface{}) Neorm {
 	}
 
 	orm.Query = query
+
+	return *orm
+}
+
+func (orm *Neorm) SelectFunction(function string, args ...interface{}) Neorm {
+	orm._Table = ""
+	orm._Type = "c"
+	orm.Query = ""
+	orm._Args = []any{}
+
+	orm.Query = fmt.Sprintf("SELECT * FROM %s(", function)
+
+	for i, arg := range args {
+		orm._Args = append(orm._Args, arg)
+
+		placeholder := orm.getPlaceHolder()
+
+		if i+1 != len(args) {
+			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
+		} else {
+			orm.Query = fmt.Sprintf("%s%s", orm.Query, placeholder)
+		}
+	}
+	orm.Query = orm.Query + ")"
 
 	return *orm
 }
