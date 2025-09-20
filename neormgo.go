@@ -14,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.3.3"
+const Version = "1.3.4"
 
 type Driver int
 
@@ -316,93 +316,88 @@ func (orm *Neorm) Execute() error {
 			return err
 		}
 
+		var return_val_selector_query string = orm.Query
+
 		if orm._ResultAlias != "" {
 			resultAliasWithoutAt := strings.TrimPrefix(orm._ResultAlias, "@")
 
-			var return_val_selector_query string
 			switch orm._Driver {
 			case Mysql:
 				return_val_selector_query = fmt.Sprintf("SELECT %s AS %s", orm._ResultAlias, resultAliasWithoutAt)
 			case Postgresql:
 				return_val_selector_query = fmt.Sprintf("SELECT %s() AS %s", orm._Procedure, resultAliasWithoutAt)
 			}
-
-			if orm.Tx != nil {
-				stmt, err = orm.Tx.PrepareContext(ctx, return_val_selector_query)
-			} else {
-				stmt, err = newConn.PrepareContext(ctx, return_val_selector_query)
-
-				if err != nil {
-					return err
-				}
-			}
-
-			if err != nil {
-				return err
-			}
-
-			rows, err := stmt.Query(orm._Args...)
-
-			if err != nil {
-				return err
-			}
-
-			defer rows.Close()
-
-			columns, err := rows.Columns()
-			if err != nil {
-				return err
-			}
-
-			values := make([]interface{}, len(columns))
-			valuePtrs := make([]interface{}, len(columns))
-			for i := range columns {
-				valuePtrs[i] = &values[i]
-			}
-
-			var results []map[string]interface{}
-			for rows.Next() {
-				err := rows.Scan(valuePtrs...)
-
-				if err != nil {
-					return err
-				}
-
-				rows := make(map[string]interface{})
-				for i, col := range columns {
-					var v interface{}
-					val := values[i]
-
-					b, ok := val.([]byte)
-					if ok {
-						v = string(b)
-					} else {
-						v = val
-					}
-
-					rows[col] = v
-				}
-
-				results = append(results, rows)
-			}
-
-			if err = rows.Err(); err != nil {
-				return err
-			}
-
-			orm._Args = orm._Args[:0]
-			orm._Rows = results
-
-			orm._ResultAlias = ""
-
-			defer rows.Close()
-		} else {
-			orm._Args = orm._Args[:0]
-
-			orm._ResultAlias = ""
-
-			orm._Rows = []map[string]interface{}{}
 		}
+
+		if orm.Tx != nil {
+			stmt, err = orm.Tx.PrepareContext(ctx, return_val_selector_query)
+		} else {
+			stmt, err = newConn.PrepareContext(ctx, return_val_selector_query)
+
+			if err != nil {
+				return err
+			}
+		}
+
+		if err != nil {
+			return err
+		}
+
+		rows, err := stmt.Query(orm._Args...)
+
+		if err != nil {
+			return err
+		}
+
+		defer rows.Close()
+
+		columns, err := rows.Columns()
+		if err != nil {
+			return err
+		}
+
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		var results []map[string]interface{}
+		for rows.Next() {
+			err := rows.Scan(valuePtrs...)
+
+			if err != nil {
+				return err
+			}
+
+			rows := make(map[string]interface{})
+			for i, col := range columns {
+				var v interface{}
+				val := values[i]
+
+				b, ok := val.([]byte)
+				if ok {
+					v = string(b)
+				} else {
+					v = val
+				}
+
+				rows[col] = v
+			}
+
+			results = append(results, rows)
+		}
+
+		if err = rows.Err(); err != nil {
+			return err
+		}
+
+		orm._Args = orm._Args[:0]
+		orm._Rows = results
+
+		orm._ResultAlias = ""
+
+		defer rows.Close()
 	} else if orm._Type == "i" {
 		rows, err := stmt.Query(orm._Args...)
 		if err != nil {
