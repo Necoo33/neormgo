@@ -14,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.3.5"
+const Version = "1.4.0"
 
 type Driver int
 
@@ -1421,6 +1421,12 @@ func (orm *Neorm) Where(column, mark string, value interface{}) Neorm {
 	return *orm
 }
 
+func (orm *Neorm) WhereExpr(column, mark string, expr string) Neorm {
+	orm.Query = fmt.Sprintf("%s WHERE %s %s %s", orm.Query, column, mark, expr)
+
+	return *orm
+}
+
 func (orm *Neorm) Or(column, mark string, value interface{}) Neorm {
 	if value != nil {
 		orm._Args = append(orm._Args, value)
@@ -1438,6 +1444,12 @@ func (orm *Neorm) Or(column, mark string, value interface{}) Neorm {
 			panic("Invalid operator for NULL value")
 		}
 	}
+
+	return *orm
+}
+
+func (orm *Neorm) OrExpr(column, mark string, expr string) Neorm {
+	orm.Query = fmt.Sprintf("%s OR %s %s %s", orm.Query, column, mark, expr)
 
 	return *orm
 }
@@ -1463,6 +1475,12 @@ func (orm *Neorm) And(column, mark string, value interface{}) Neorm {
 	return *orm
 }
 
+func (orm *Neorm) AndExpr(column, mark string, expr string) Neorm {
+	orm.Query = fmt.Sprintf("%s AND %s %s %s", orm.Query, column, mark, expr)
+
+	return *orm
+}
+
 func (orm *Neorm) Set(column string, value interface{}) Neorm {
 	var p string
 
@@ -1478,6 +1496,12 @@ func (orm *Neorm) Set(column string, value interface{}) Neorm {
 	} else {
 		orm.Query = fmt.Sprintf("%s SET %s = %s", orm.Query, column, p)
 	}
+
+	return *orm
+}
+
+func (orm *Neorm) SetExpr(column, expr string) Neorm {
+	orm.Query = fmt.Sprintf("%s SET %s = %s", orm.Query, column, expr)
 
 	return *orm
 }
