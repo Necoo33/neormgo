@@ -14,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.3.4"
+const Version = "1.3.5"
 
 type Driver int
 
@@ -1269,10 +1269,10 @@ func (orm *Neorm) SelectFunction(function string, args ...interface{}) Neorm {
 
 		placeholder := orm.getPlaceHolder()
 
-		if i+1 != len(args) {
-			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
-		} else {
+		if i == 0 {
 			orm.Query = fmt.Sprintf("%s%s", orm.Query, placeholder)
+		} else {
+			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
 		}
 	}
 	orm.Query = orm.Query + ")"
