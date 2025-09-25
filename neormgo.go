@@ -14,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.4.0"
+const Version = "1.4.1"
 
 type Driver int
 
@@ -1632,9 +1632,17 @@ func (orm *Neorm) CloseParenthesis() Neorm {
 func (orm *Neorm) OrderBy(column, ordering string) Neorm {
 	switch ordering {
 	case "ASC", "Asc", "asc":
-		orm.Query = fmt.Sprintf("%s ORDER BY %s ASC", orm.Query, column)
+		if strings.Contains(orm.Query, "ORDER BY") {
+			orm.Query = fmt.Sprintf("%s, %s ASC", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s ORDER BY %s ASC", orm.Query, column)
+		}
 	case "DESC", "Desc", "desc":
-		orm.Query = fmt.Sprintf("%s ORDER BY %s DESC", orm.Query, column)
+		if strings.Contains(orm.Query, "ORDER BY") {
+			orm.Query = fmt.Sprintf("%s, %s DESC", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s ORDER BY %s DESC", orm.Query, column)
+		}
 	default:
 		panic("Error on OrderBy method: ordering should be either ASC or DESC.")
 	}
@@ -1643,11 +1651,17 @@ func (orm *Neorm) OrderBy(column, ordering string) Neorm {
 }
 
 func (orm *Neorm) OrderByField(column string, values []string) Neorm {
-	orm.Query = fmt.Sprintf("%s ORDER BY FIELD(%s, )", orm.Query, column)
+	if strings.Contains(orm.Query, "ORDER BY") {
+		orm.Query = fmt.Sprintf("%s, FIELD(%s", orm.Query, column)
+	} else {
+		orm.Query = fmt.Sprintf("%s ORDER BY FIELD(%s", orm.Query, column)
+	}
 
 	for _, value := range values {
-		orm.Query = fmt.Sprintf("%s%s", orm.Query, value)
+		orm.Query = fmt.Sprintf("%s, %s", orm.Query, value)
 	}
+
+	orm.Query = orm.Query + ")"
 
 	return *orm
 }
