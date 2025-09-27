@@ -10,11 +10,12 @@ import (
 
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.4.1"
+const Version = "1.5.0"
 
 type Driver int
 
@@ -1265,7 +1266,18 @@ func (orm *Neorm) SelectFunction(function string, args ...interface{}) Neorm {
 	orm.Query = fmt.Sprintf("SELECT * FROM %s(", function)
 
 	for i, arg := range args {
-		orm._Args = append(orm._Args, arg)
+		if orm._Driver == Postgresql {
+			switch arg.(type) {
+			case []string, []int, []int8, []int16, []int32, []int64,
+				[]uint, []uint8, []uint16, []uint32, []uint64,
+				[]float32, []float64, []bool, []any:
+				orm._Args = append(orm._Args, pq.Array(arg))
+			default:
+				orm._Args = append(orm._Args, arg)
+			}
+		} else {
+			orm._Args = append(orm._Args, arg)
+		}
 
 		placeholder := orm.getPlaceHolder()
 
@@ -1301,7 +1313,18 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 
 	if slice, ok := values.([]interface{}); ok {
 		for i, value := range slice {
-			orm._Args = append(orm._Args, value)
+			if orm._Driver == Postgresql {
+				switch value.(type) {
+				case []string, []int, []int8, []int16, []int32, []int64,
+					[]uint, []uint8, []uint16, []uint32, []uint64,
+					[]float32, []float64, []bool, []any:
+					orm._Args = append(orm._Args, pq.Array(value))
+				default:
+					orm._Args = append(orm._Args, value)
+				}
+			} else {
+				orm._Args = append(orm._Args, value)
+			}
 
 			p := orm.getPlaceHolder()
 
@@ -1372,7 +1395,18 @@ func (orm *Neorm) Call(callType, procedure, resultAlias string, args ...interfac
 	}
 
 	for i, arg := range args {
-		orm._Args = append(orm._Args, arg)
+		if orm._Driver == Postgresql {
+			switch arg.(type) {
+			case []string, []int, []int8, []int16, []int32, []int64,
+				[]uint, []uint8, []uint16, []uint32, []uint64,
+				[]float32, []float64, []bool, []any:
+				orm._Args = append(orm._Args, pq.Array(arg))
+			default:
+				orm._Args = append(orm._Args, arg)
+			}
+		} else {
+			orm._Args = append(orm._Args, arg)
+		}
 
 		placeholder := orm.getPlaceHolder()
 
@@ -1485,7 +1519,18 @@ func (orm *Neorm) Set(column string, value interface{}) Neorm {
 	var p string
 
 	if value != nil {
-		orm._Args = append(orm._Args, value)
+		if orm._Driver == Postgresql {
+			switch value.(type) {
+			case []string, []int, []int8, []int16, []int32, []int64,
+				[]uint, []uint8, []uint16, []uint32, []uint64,
+				[]float32, []float64, []bool, []any:
+				orm._Args = append(orm._Args, pq.Array(value))
+			default:
+				orm._Args = append(orm._Args, value)
+			}
+		} else {
+			orm._Args = append(orm._Args, value)
+		}
 		p = orm.getPlaceHolder()
 	} else {
 		p = "NULL"
