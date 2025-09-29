@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.5.0"
+const Version = "1.6.0"
 
 type Driver int
 
@@ -1547,6 +1547,17 @@ func (orm *Neorm) Set(column string, value interface{}) Neorm {
 
 func (orm *Neorm) SetExpr(column, expr string) Neorm {
 	orm.Query = fmt.Sprintf("%s SET %s = %s", orm.Query, column, expr)
+
+	return *orm
+}
+
+func (orm *Neorm) Between(first, second interface{}) Neorm {
+	firstPlaceHolder := orm.getPlaceHolder()
+	secondPlaceHolder := orm.getPlaceHolder()
+
+	orm._Args = append(orm._Args, first, second)
+
+	orm.Query = fmt.Sprintf("%s BETWEEN %s AND %s", orm.Query, firstPlaceHolder, secondPlaceHolder)
 
 	return *orm
 }
