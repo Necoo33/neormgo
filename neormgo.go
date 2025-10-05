@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.7.0"
+const Version = "1.8.0"
 
 type Driver int
 
@@ -1562,17 +1562,75 @@ func (orm *Neorm) Between(first, second interface{}) Neorm {
 	return *orm
 }
 
-func (orm *Neorm) Like(columns []string, operand string) Neorm {
-	for i, column := range columns {
+func (orm *Neorm) Like(queryType, column, operand, pattern string) Neorm {
+	if queryType == "" {
+		queryType = "WHERE"
+	}
+
+	if column == "" {
+		panic("Column cannot be empty.")
+	}
+
+	if operand == "" {
+		panic("Operand cannot be empty.")
+	}
+
+	switch strings.ToLower(pattern) {
+	case "all", "a", "contains", "c", "includes", "i":
+		operand = "%" + operand + "%"
+	case "start", "starts", "s", "begins", "b":
+		operand = operand + "%"
+	case "end", "ends", "e":
+		operand = "%" + operand
+	}
+
+	QueryType := strings.ToUpper(queryType)
+	switch QueryType {
+	case "WHERE", "AND", "OR":
+		placeholder := orm.getPlaceHolder()
+
 		orm._Args = append(orm._Args, operand)
 
-		p := orm.getPlaceHolder()
+		orm.Query = fmt.Sprintf("%s %s %s LIKE %s", orm.Query, QueryType, column, placeholder)
+	default:
+		panic("Invalid query type for Like method: it should be either WHERE, AND or OR.")
+	}
 
-		if i == 0 {
-			orm.Query = fmt.Sprintf("%s WHERE %s LIKE %s", orm.Query, column, p)
-		} else {
-			orm.Query = fmt.Sprintf("%s OR %s LIKE %s", orm.Query, column, p)
-		}
+	return *orm
+}
+
+func (orm *Neorm) NotLike(queryType, column, operand, pattern string) Neorm {
+	if queryType == "" {
+		queryType = "WHERE"
+	}
+
+	if column == "" {
+		panic("Column cannot be empty.")
+	}
+
+	if operand == "" {
+		panic("Operand cannot be empty.")
+	}
+
+	switch strings.ToLower(pattern) {
+	case "all", "a", "contains", "c", "includes", "i":
+		operand = "%" + operand + "%"
+	case "start", "starts", "s", "begins", "b":
+		operand = operand + "%"
+	case "end", "ends", "e":
+		operand = "%" + operand
+	}
+
+	QueryType := strings.ToUpper(queryType)
+	switch QueryType {
+	case "WHERE", "AND", "OR":
+		placeholder := orm.getPlaceHolder()
+
+		orm._Args = append(orm._Args, operand)
+
+		orm.Query = fmt.Sprintf("%s %s %s NOT LIKE %s", orm.Query, QueryType, column, placeholder)
+	default:
+		panic("Invalid query type for NotLike method: it should be either WHERE, AND or OR.")
 	}
 
 	return *orm
