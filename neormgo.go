@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.6.0"
+const Version = "1.7.0"
 
 type Driver int
 
@@ -1707,6 +1707,10 @@ func (orm *Neorm) OrderBy(column, ordering string) Neorm {
 }
 
 func (orm *Neorm) OrderByField(column string, values []string) Neorm {
+	if len(values) == 0 {
+		panic("Error on OrderByField method: values cannot be empty.")
+	}
+
 	if strings.Contains(orm.Query, "ORDER BY") {
 		orm.Query = fmt.Sprintf("%s, FIELD(%s", orm.Query, column)
 	} else {
@@ -1724,6 +1728,22 @@ func (orm *Neorm) OrderByField(column string, values []string) Neorm {
 
 func (orm *Neorm) OrderRandom() Neorm {
 	orm.Query = fmt.Sprintf("%s ORDER BY RAND()", orm.Query)
+
+	return *orm
+}
+
+func (orm *Neorm) GroupBy(columns ...string) Neorm {
+	if len(columns) == 0 {
+		panic("Error on GroupBy method: columns cannot be empty.")
+	}
+
+	for i, column := range columns {
+		if i == 0 && !strings.Contains(orm.Query, "GROUP BY") {
+			orm.Query = fmt.Sprintf("%s GROUP BY %s", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s, %s", orm.Query, column)
+		}
+	}
 
 	return *orm
 }
