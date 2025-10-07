@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.8.0"
+const Version = "1.8.1"
 
 type Driver int
 
@@ -1440,13 +1440,25 @@ func (orm *Neorm) Where(column, mark string, value interface{}) Neorm {
 
 		p := orm.getPlaceHolder()
 
-		orm.Query = fmt.Sprintf("%s WHERE %s %s %s", orm.Query, column, mark, p)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s %s %s", orm.Query, column, mark, p)
+		} else {
+			orm.Query = fmt.Sprintf("%s WHERE %s %s %s", orm.Query, column, mark, p)
+		}
 	} else {
 		switch mark {
 		case "=":
-			orm.Query = fmt.Sprintf("%s WHERE %s IS NULL", orm.Query, column)
+			if strings.HasSuffix(orm.Query, " (") {
+				orm.Query = fmt.Sprintf("%s%s IS NULL", orm.Query, column)
+			} else {
+				orm.Query = fmt.Sprintf("%s WHERE %s IS NULL", orm.Query, column)
+			}
 		case "!=", "<>":
-			orm.Query = fmt.Sprintf("%s WHERE %s IS NOT NULL", orm.Query, column)
+			if strings.HasSuffix(orm.Query, " (") {
+				orm.Query = fmt.Sprintf("%s%s IS NOT NULL", orm.Query, column)
+			} else {
+				orm.Query = fmt.Sprintf("%s WHERE %s IS NOT NULL", orm.Query, column)
+			}
 		default:
 			panic("Invalid operator for NULL value")
 		}
@@ -1456,7 +1468,11 @@ func (orm *Neorm) Where(column, mark string, value interface{}) Neorm {
 }
 
 func (orm *Neorm) WhereExpr(column, mark string, expr string) Neorm {
-	orm.Query = fmt.Sprintf("%s WHERE %s %s %s", orm.Query, column, mark, expr)
+	if strings.HasSuffix(orm.Query, " (") {
+		orm.Query = fmt.Sprintf("%s%s %s %s", orm.Query, column, mark, expr)
+	} else {
+		orm.Query = fmt.Sprintf("%s WHERE %s %s %s", orm.Query, column, mark, expr)
+	}
 
 	return *orm
 }
@@ -1467,13 +1483,25 @@ func (orm *Neorm) Or(column, mark string, value interface{}) Neorm {
 
 		p := orm.getPlaceHolder()
 
-		orm.Query = fmt.Sprintf("%s OR %s %s %s", orm.Query, column, mark, p)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s %s %s", orm.Query, column, mark, p)
+		} else {
+			orm.Query = fmt.Sprintf("%s OR %s %s %s", orm.Query, column, mark, p)
+		}
 	} else {
 		switch mark {
 		case "=":
-			orm.Query = fmt.Sprintf("%s OR %s IS NULL", orm.Query, column)
+			if strings.HasSuffix(orm.Query, " (") {
+				orm.Query = fmt.Sprintf("%s%s IS NULL", orm.Query, column)
+			} else {
+				orm.Query = fmt.Sprintf("%s OR %s IS NULL", orm.Query, column)
+			}
 		case "!=", "<>":
-			orm.Query = fmt.Sprintf("%s OR %s IS NOT NULL", orm.Query, column)
+			if strings.HasSuffix(orm.Query, " (") {
+				orm.Query = fmt.Sprintf("%s%s IS NOT NULL", orm.Query, column)
+			} else {
+				orm.Query = fmt.Sprintf("%s OR %s IS NOT NULL", orm.Query, column)
+			}
 		default:
 			panic("Invalid operator for NULL value")
 		}
@@ -1483,7 +1511,11 @@ func (orm *Neorm) Or(column, mark string, value interface{}) Neorm {
 }
 
 func (orm *Neorm) OrExpr(column, mark string, expr string) Neorm {
-	orm.Query = fmt.Sprintf("%s OR %s %s %s", orm.Query, column, mark, expr)
+	if strings.HasSuffix(orm.Query, " (") {
+		orm.Query = fmt.Sprintf("%s%s %s %s", orm.Query, column, mark, expr)
+	} else {
+		orm.Query = fmt.Sprintf("%s OR %s %s %s", orm.Query, column, mark, expr)
+	}
 
 	return *orm
 }
@@ -1494,13 +1526,25 @@ func (orm *Neorm) And(column, mark string, value interface{}) Neorm {
 
 		p := orm.getPlaceHolder()
 
-		orm.Query = fmt.Sprintf("%s AND %s %s %s", orm.Query, column, mark, p)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s %s %s", orm.Query, column, mark, p)
+		} else {
+			orm.Query = fmt.Sprintf("%s AND %s %s %s", orm.Query, column, mark, p)
+		}
 	} else {
 		switch mark {
 		case "=":
-			orm.Query = fmt.Sprintf("%s AND %s IS NULL", orm.Query, column)
+			if strings.HasSuffix(orm.Query, " (") {
+				orm.Query = fmt.Sprintf("%s%s IS NULL", orm.Query, column)
+			} else {
+				orm.Query = fmt.Sprintf("%s AND %s IS NULL", orm.Query, column)
+			}
 		case "!=", "<>":
-			orm.Query = fmt.Sprintf("%s AND %s IS NOT NULL", orm.Query, column)
+			if strings.HasSuffix(orm.Query, " (") {
+				orm.Query = fmt.Sprintf("%s%s IS NOT NULL", orm.Query, column)
+			} else {
+				orm.Query = fmt.Sprintf("%s AND %s IS NOT NULL", orm.Query, column)
+			}
 		default:
 			panic("Invalid operator for NULL value")
 		}
@@ -1510,7 +1554,11 @@ func (orm *Neorm) And(column, mark string, value interface{}) Neorm {
 }
 
 func (orm *Neorm) AndExpr(column, mark string, expr string) Neorm {
-	orm.Query = fmt.Sprintf("%s AND %s %s %s", orm.Query, column, mark, expr)
+	if strings.HasSuffix(orm.Query, " (") {
+		orm.Query = fmt.Sprintf("%s%s %s %s", orm.Query, column, mark, expr)
+	} else {
+		orm.Query = fmt.Sprintf("%s AND %s %s %s", orm.Query, column, mark, expr)
+	}
 
 	return *orm
 }
