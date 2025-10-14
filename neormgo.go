@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.8.1"
+const Version = "1.9.0"
 
 type Driver int
 
@@ -1292,6 +1292,16 @@ func (orm *Neorm) SelectFunction(function string, args ...interface{}) Neorm {
 	return *orm
 }
 
+func (orm *Neorm) CustomSelectQuery(query string) Neorm {
+	orm._Table = ""
+	orm._Type = "s"
+	orm._Args = []any{}
+
+	orm.Query = query
+
+	return *orm
+}
+
 func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 	orm._Table = ""
 	orm.Query = ""
@@ -1343,6 +1353,16 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 	return *orm
 }
 
+func (orm *Neorm) CustomInsertQuery(query string) Neorm {
+	orm._Table = ""
+	orm._Type = "i"
+	orm._Args = []any{}
+
+	orm.Query = query
+
+	return *orm
+}
+
 func (orm *Neorm) Returning(column string) Neorm {
 	if orm._Driver == Postgresql {
 		orm.Query = fmt.Sprintf("%s RETURNING %s", orm.Query, column)
@@ -1360,11 +1380,31 @@ func (orm *Neorm) Update() Neorm {
 	return *orm
 }
 
+func (orm *Neorm) CustomUpdateQuery(query string) Neorm {
+	orm._Table = ""
+	orm._Type = "u"
+	orm._Args = []any{}
+
+	orm.Query = query
+
+	return *orm
+}
+
 func (orm *Neorm) Delete() Neorm {
 	orm._Table = ""
 	orm._Type = "u"
 	orm.Query = "DELETE FROM"
 	orm._Args = []any{}
+
+	return *orm
+}
+
+func (orm *Neorm) CustomDeleteQuery(query string) Neorm {
+	orm._Table = ""
+	orm._Type = "u"
+	orm._Args = []any{}
+
+	orm.Query = query
 
 	return *orm
 }
