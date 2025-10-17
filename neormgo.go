@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "1.9.0"
+const Version = "2.0.0"
 
 type Driver int
 
@@ -1361,6 +1361,73 @@ func (orm *Neorm) CustomInsertQuery(query string) Neorm {
 	orm.Query = query
 
 	return *orm
+}
+
+func (orm *Neorm) GetFullQuery() string {
+	switch orm._Driver {
+	case Postgresql:
+		QueryString := orm.Query
+		for i, arg := range orm._Args {
+			placeholderStr := fmt.Sprintf("$%d", i+1)
+			switch arg.(type) {
+			case []string, []int, []int8, []int16, []int32, []int64,
+				[]uint, []uint8, []uint16, []uint32, []uint64,
+				[]float32, []float64, []bool, []any:
+				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("%v", pq.Array(arg)), 1)
+			case string:
+				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("'%v'", arg), 1)
+			case int, int8, int16, int32, int64,
+				uint, uint8, uint16, uint32, uint64,
+				float32, float64, bool, any:
+				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("%v", arg), 1)
+			case nil:
+				QueryString = strings.Replace(QueryString, placeholderStr, "NULL", 1)
+			default:
+				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("%v", arg), 1)
+			}
+		}
+
+		return QueryString
+	case Mysql, Sqlite3:
+		QueryString := orm.Query
+		for _, arg := range orm._Args {
+			switch arg.(type) {
+			case string:
+				QueryString = strings.Replace(QueryString, "?", fmt.Sprintf("'%v'", arg), 1)
+			case int, int8, int16, int32, int64,
+				uint, uint8, uint16, uint32, uint64,
+				float32, float64, bool, any:
+				QueryString = strings.Replace(QueryString, "?", fmt.Sprintf("%v", arg), 1)
+			case nil:
+				QueryString = strings.Replace(QueryString, "?", "NULL", 1)
+			default:
+				QueryString = strings.Replace(QueryString, "?", fmt.Sprintf("%v", arg), 1)
+			}
+		}
+
+		return QueryString
+	case MicrosoftSqlServer:
+		QueryString := orm.Query
+		for i, arg := range orm._Args {
+			placeholderStr := fmt.Sprintf("@p%d", i+1)
+			switch arg.(type) {
+			case string:
+				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("'%v'", arg), 1)
+			case int, int8, int16, int32, int64,
+				uint, uint8, uint16, uint32, uint64,
+				float32, float64, bool, any:
+				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("%v", arg), 1)
+			case nil:
+				QueryString = strings.Replace(QueryString, placeholderStr, "NULL", 1)
+			default:
+				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("%v", arg), 1)
+			}
+		}
+
+		return QueryString
+	}
+
+	return ""
 }
 
 func (orm *Neorm) Returning(column string) Neorm {
