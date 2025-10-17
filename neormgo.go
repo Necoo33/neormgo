@@ -1364,9 +1364,10 @@ func (orm *Neorm) CustomInsertQuery(query string) Neorm {
 }
 
 func (orm *Neorm) GetFullQuery() string {
+	QueryString := ""
 	switch orm._Driver {
 	case Postgresql:
-		QueryString := orm.Query
+		QueryString = orm.Query
 		for i, arg := range orm._Args {
 			placeholderStr := fmt.Sprintf("$%d", i+1)
 			switch arg.(type) {
@@ -1386,10 +1387,8 @@ func (orm *Neorm) GetFullQuery() string {
 				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("%v", arg), 1)
 			}
 		}
-
-		return QueryString
 	case Mysql, Sqlite3:
-		QueryString := orm.Query
+		QueryString = orm.Query
 		for _, arg := range orm._Args {
 			switch arg.(type) {
 			case string:
@@ -1404,10 +1403,8 @@ func (orm *Neorm) GetFullQuery() string {
 				QueryString = strings.Replace(QueryString, "?", fmt.Sprintf("%v", arg), 1)
 			}
 		}
-
-		return QueryString
 	case MicrosoftSqlServer:
-		QueryString := orm.Query
+		QueryString = orm.Query
 		for i, arg := range orm._Args {
 			placeholderStr := fmt.Sprintf("@p%d", i+1)
 			switch arg.(type) {
@@ -1423,11 +1420,14 @@ func (orm *Neorm) GetFullQuery() string {
 				QueryString = strings.Replace(QueryString, placeholderStr, fmt.Sprintf("%v", arg), 1)
 			}
 		}
-
-		return QueryString
 	}
 
-	return ""
+	orm._Args = []any{}
+	orm.Query = ""
+	orm._Table = ""
+	orm._Type = ""
+
+	return QueryString
 }
 
 func (orm *Neorm) Returning(column string) Neorm {
