@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.0.2"
+const Version = "2.1.0"
 
 type Driver int
 
@@ -1742,11 +1742,15 @@ func (orm *Neorm) Like(queryType, column, operand, pattern string) Neorm {
 	QueryType := strings.ToUpper(queryType)
 	switch QueryType {
 	case "WHERE", "AND", "OR":
-		placeholder := orm.getPlaceHolder()
-
 		orm._Args = append(orm._Args, operand)
 
-		orm.Query = fmt.Sprintf("%s %s %s LIKE %s", orm.Query, QueryType, column, placeholder)
+		placeholder := orm.getPlaceHolder()
+
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s LIKE %s", orm.Query, column, placeholder)
+		} else {
+			orm.Query = fmt.Sprintf("%s %s %s LIKE %s", orm.Query, QueryType, column, placeholder)
+		}
 	default:
 		panic("Invalid query type for Like method: it should be either WHERE, AND or OR.")
 	}
@@ -1779,11 +1783,15 @@ func (orm *Neorm) NotLike(queryType, column, operand, pattern string) Neorm {
 	QueryType := strings.ToUpper(queryType)
 	switch QueryType {
 	case "WHERE", "AND", "OR":
-		placeholder := orm.getPlaceHolder()
-
 		orm._Args = append(orm._Args, operand)
 
-		orm.Query = fmt.Sprintf("%s %s %s NOT LIKE %s", orm.Query, QueryType, column, placeholder)
+		placeholder := orm.getPlaceHolder()
+
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s NOT LIKE %s", orm.Query, column, placeholder)
+		} else {
+			orm.Query = fmt.Sprintf("%s %s %s NOT LIKE %s", orm.Query, QueryType, column, placeholder)
+		}
 	default:
 		panic("Invalid query type for NotLike method: it should be either WHERE, AND or OR.")
 	}
