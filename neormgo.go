@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.1.0"
+const Version = "2.2.0"
 
 type Driver int
 
@@ -400,47 +400,56 @@ func (orm *Neorm) Execute() error {
 
 		defer rows.Close()
 	} else if orm._Type == "i" {
-		rows, err := stmt.Query(orm._Args...)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
+		if orm._Driver == Postgresql {
+			rows, err := stmt.Query(orm._Args...)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
 
-		if rows.Next() {
-			// Tek satır ve tek sütun beklediğimiz için direkt alıyoruz
-			var id interface{}
-			if err := rows.Scan(&id); err != nil {
+			if rows.Next() {
+				// Tek satır ve tek sütun beklediğimiz için direkt alıyoruz
+				var id interface{}
+				if err := rows.Scan(&id); err != nil {
+					return err
+				}
+
+				switch v := id.(type) {
+				case int64:
+					orm._LastInsertIdForPostgresql = strconv.FormatInt(v, 10)
+				case int32:
+					orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
+				case int16:
+					orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
+				case int8:
+					orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
+				case float64:
+					orm._LastInsertIdForPostgresql = strconv.FormatFloat(v, 'f', -1, 64)
+				case float32:
+					orm._LastInsertIdForPostgresql = strconv.FormatFloat(float64(v), 'f', -1, 64)
+				case bool:
+					orm._LastInsertIdForPostgresql = strconv.FormatBool(v)
+				case []byte:
+					orm._LastInsertIdForPostgresql = string(v)
+				case string:
+					orm._LastInsertIdForPostgresql = v
+				case nil:
+					orm._LastInsertIdForPostgresql = ""
+				default:
+					return fmt.Errorf("unexpected type: %T", v)
+				}
+			}
+
+			if err := rows.Err(); err != nil {
+				return err
+			}
+		} else if orm._Driver == Mysql {
+			result, err := stmt.Exec(orm._Args...)
+			if err != nil {
 				return err
 			}
 
-			switch v := id.(type) {
-			case int64:
-				orm._LastInsertIdForPostgresql = strconv.FormatInt(v, 10)
-			case int32:
-				orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
-			case int16:
-				orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
-			case int8:
-				orm._LastInsertIdForPostgresql = strconv.FormatInt(int64(v), 10)
-			case float64:
-				orm._LastInsertIdForPostgresql = strconv.FormatFloat(v, 'f', -1, 64)
-			case float32:
-				orm._LastInsertIdForPostgresql = strconv.FormatFloat(float64(v), 'f', -1, 64)
-			case bool:
-				orm._LastInsertIdForPostgresql = strconv.FormatBool(v)
-			case []byte:
-				orm._LastInsertIdForPostgresql = string(v)
-			case string:
-				orm._LastInsertIdForPostgresql = v
-			case nil:
-				orm._LastInsertIdForPostgresql = ""
-			default:
-				return fmt.Errorf("unexpected type: %T", v)
-			}
-		}
-
-		if err := rows.Err(); err != nil {
-			return err
+			orm._Result = result
 		}
 
 		// Artık gerek yok, args temizle
