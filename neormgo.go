@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.2.0"
+const Version = "2.3.0"
 
 type Driver int
 
@@ -1489,6 +1489,7 @@ func (orm *Neorm) Call(callType, procedure, resultAlias string, args ...interfac
 	orm._Procedure = procedure
 	orm._Type = "c"
 	orm._Table = ""
+	orm.Query = ""
 	orm._Args = []any{}
 
 	switch callType {
@@ -1526,10 +1527,10 @@ func (orm *Neorm) Call(callType, procedure, resultAlias string, args ...interfac
 
 		placeholder := orm.getPlaceHolder()
 
-		if i+1 != len(args) {
-			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
-		} else {
+		if i == 0 {
 			orm.Query = fmt.Sprintf("%s%s", orm.Query, placeholder)
+		} else {
+			orm.Query = fmt.Sprintf("%s, %s", orm.Query, placeholder)
 		}
 	}
 
