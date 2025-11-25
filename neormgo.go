@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.3.0"
+const Version = "2.4.0"
 
 type Driver int
 
@@ -2003,6 +2003,12 @@ func (orm *Neorm) Offset(offset int) Neorm {
 
 func (orm *Neorm) CustomQuery(query string) Neorm {
 	orm.Query = query
+
+	return *orm
+}
+
+func (orm *Neorm) AppendCustom(keywordAndValue string) Neorm {
+	orm.Query = fmt.Sprintf("%s %s", orm.Query, keywordAndValue)
 
 	return *orm
 }
