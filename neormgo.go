@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.4.0"
+const Version = "2.6.0"
 
 type Driver int
 
@@ -1711,7 +1711,11 @@ func (orm *Neorm) Set(column string, value interface{}) Neorm {
 }
 
 func (orm *Neorm) SetExpr(column, expr string) Neorm {
-	orm.Query = fmt.Sprintf("%s SET %s = %s", orm.Query, column, expr)
+	if strings.Contains(orm.Query, "SET") {
+		orm.Query = fmt.Sprintf("%s, %s = %s", orm.Query, column, expr)
+	} else {
+		orm.Query = fmt.Sprintf("%s SET %s = %s", orm.Query, column, expr)
+	}
 
 	return *orm
 }
@@ -1812,11 +1816,23 @@ func (orm *Neorm) NotLike(queryType, column, operand, pattern string) Neorm {
 func (orm *Neorm) In(inType string, column string, values []any) Neorm {
 	switch strings.ToLower(inType) {
 	case "where":
-		orm.Query = fmt.Sprintf("%s WHERE %s IN(", orm.Query, column)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s IN(", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s WHERE %s IN(", orm.Query, column)
+		}
 	case "and":
-		orm.Query = fmt.Sprintf("%s AND %s IN(", orm.Query, column)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s IN(", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s AND %s IN(", orm.Query, column)
+		}
 	case "or":
-		orm.Query = fmt.Sprintf("%s OR %s IN(", orm.Query, column)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s IN(", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s OR %s IN(", orm.Query, column)
+		}
 	}
 
 	for i, value := range values {
@@ -1839,11 +1855,23 @@ func (orm *Neorm) In(inType string, column string, values []any) Neorm {
 func (orm *Neorm) NotIn(inType string, column string, values []any) Neorm {
 	switch strings.ToLower(inType) {
 	case "where":
-		orm.Query = fmt.Sprintf("%s WHERE %s NOT IN(", orm.Query, column)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s NOT IN(", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s WHERE %s NOT IN(", orm.Query, column)
+		}
 	case "and":
-		orm.Query = fmt.Sprintf("%s AND %s NOT IN(", orm.Query, column)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s NOT IN(", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s AND %s NOT IN(", orm.Query, column)
+		}
 	case "or":
-		orm.Query = fmt.Sprintf("%s OR %s NOT IN(", orm.Query, column)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s%s NOT IN(", orm.Query, column)
+		} else {
+			orm.Query = fmt.Sprintf("%s OR %s NOT IN(", orm.Query, column)
+		}
 	}
 
 	for i, value := range values {
@@ -1898,7 +1926,11 @@ func (orm *Neorm) OpenParenthesis(parenthesisType string) Neorm {
 
 	switch upperType {
 	case "WHERE", "AND", "OR":
-		orm.Query = fmt.Sprintf("%s %s (", orm.Query, upperType)
+		if strings.HasSuffix(orm.Query, " (") {
+			orm.Query = fmt.Sprintf("%s (", orm.Query)
+		} else {
+			orm.Query = fmt.Sprintf("%s %s (", orm.Query, upperType)
+		}
 	default:
 		panic("For now, only WHERE, AND, OR operators supported for opening parenthesis.")
 	}
