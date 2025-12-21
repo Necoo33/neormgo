@@ -2007,8 +2007,8 @@ func (orm *Neorm) CustomQuery(query string) Neorm {
 	return *orm
 }
 
-func (orm *Neorm) AppendCustom(keywordAndValue string) Neorm {
-	orm.Query = fmt.Sprintf("%s %s", orm.Query, keywordAndValue)
+func (orm *Neorm) AppendCustom(Query string) Neorm {
+	orm.Query = fmt.Sprintf("%s %s", orm.Query, Query)
 
 	return *orm
 }
