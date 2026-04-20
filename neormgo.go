@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.6.0"
+const Version = "2.7.0"
 
 type Driver int
 
@@ -1981,7 +1981,7 @@ func (orm *Neorm) OrderByField(column string, values []string) Neorm {
 	}
 
 	for _, value := range values {
-		orm.Query = fmt.Sprintf("%s, %s", orm.Query, value)
+		orm.Query = fmt.Sprintf("%s, '%s'", orm.Query, value)
 	}
 
 	orm.Query = orm.Query + ")"
