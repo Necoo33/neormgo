@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.8.1"
+const Version = "2.8.2"
 
 type Driver int
 
@@ -336,12 +336,20 @@ func (orm *Neorm) Execute() error {
 
 		if orm.Tx != nil {
 			stmt, err = orm.Tx.PrepareContext(ctx, return_val_selector_query)
+
+			if err != nil {
+				return err
+			}
+
+			defer stmt.Close()
 		} else {
 			stmt, err = newConn.PrepareContext(ctx, return_val_selector_query)
 
 			if err != nil {
 				return err
 			}
+
+			defer stmt.Close()
 		}
 
 		if err != nil {
