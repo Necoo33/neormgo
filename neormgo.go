@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.8.2"
+const Version = "2.9.0"
 
 type Driver int
 
@@ -1371,6 +1371,41 @@ func (orm *Neorm) Insert(columns []string, values interface{}) Neorm {
 
 	orm.Query = fmt.Sprintf("INSERT INTO %s VALUES %s)", columnValues, newValues)
 
+	return *orm
+}
+
+func (orm *Neorm) InsertMany(columns []string, rows [][]interface{}) Neorm {
+	orm._Table = ""
+	orm.Query = ""
+	orm._Type = "i"
+	orm._Args = []any{}
+	// (col1, col2, col3)
+	columnPart := "(" + strings.Join(columns, ", ") + ")"
+	var valueGroups []string
+	for _, row := range rows {
+		if len(row) != len(columns) {
+			panic("each row must have the same number of values as columns")
+		}
+		placeholders := make([]string, len(row))
+		for i, value := range row {
+			if orm._Driver == Postgresql {
+				switch value.(type) {
+				case []string, []int, []int8, []int16, []int32, []int64,
+					[]uint, []uint8, []uint16, []uint32, []uint64,
+					[]float32, []float64, []bool, []any:
+					orm._Args = append(orm._Args, pq.Array(value))
+				default:
+					orm._Args = append(orm._Args, value)
+				}
+			} else {
+				orm._Args = append(orm._Args, value)
+			}
+			placeholders[i] = orm.getPlaceHolder()
+		}
+		valueGroups = append(valueGroups, "("+strings.Join(placeholders, ", ")+")")
+	}
+	orm.Query = fmt.Sprintf("INSERT INTO %s %s VALUES %s", "%s", columnPart, strings.Join(valueGroups, ", "))
+	// Table("blogs") still fills the first %s via Finish(), same as Insert
 	return *orm
 }
 
