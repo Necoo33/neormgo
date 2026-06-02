@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.10.0"
+const Version = "2.10.1"
 
 type Driver int
 
@@ -1404,8 +1404,7 @@ func (orm *Neorm) InsertMany(columns []string, rows [][]interface{}) Neorm {
 		}
 		valueGroups = append(valueGroups, "("+strings.Join(placeholders, ", ")+")")
 	}
-	orm.Query = fmt.Sprintf("INSERT INTO %s %s VALUES %s", "%s", columnPart, strings.Join(valueGroups, ", "))
-	// Table("blogs") still fills the first %s via Finish(), same as Insert
+	orm.Query = fmt.Sprintf("INSERT INTO %s VALUES %s", columnPart, strings.Join(valueGroups, ", "))
 	return *orm
 }
 
