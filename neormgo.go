@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.10.1"
+const Version = "2.11.0"
 
 type Driver int
 
@@ -1773,6 +1773,23 @@ func (orm *Neorm) Between(first, second interface{}) Neorm {
 	orm._Args = append(orm._Args, first, second)
 
 	orm.Query = fmt.Sprintf("%s BETWEEN %s AND %s", orm.Query, firstPlaceHolder, secondPlaceHolder)
+
+	return *orm
+}
+
+func (orm *Neorm) NotBetween(first, second interface{}) Neorm {
+	firstPlaceHolder := orm.getPlaceHolder()
+	secondPlaceHolder := orm.getPlaceHolder()
+
+	orm._Args = append(orm._Args, first, second)
+
+	orm.Query = fmt.Sprintf("%s NOT BETWEEN %s AND %s", orm.Query, firstPlaceHolder, secondPlaceHolder)
+
+	return *orm
+}
+
+func (orm *Neorm) Exists(query string) Neorm {
+	orm.Query = fmt.Sprintf("%s EXISTS (%s)", orm.Query, query)
 
 	return *orm
 }
