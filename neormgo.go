@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const Version = "2.11.0"
+const Version = "2.11.1"
 
 type Driver int
 
@@ -1788,8 +1788,13 @@ func (orm *Neorm) NotBetween(first, second interface{}) Neorm {
 	return *orm
 }
 
-func (orm *Neorm) Exists(query string) Neorm {
-	orm.Query = fmt.Sprintf("%s EXISTS (%s)", orm.Query, query)
+func (orm *Neorm) Exists(operator any, query string) Neorm {
+	switch operator.(type) {
+	case string:
+		orm.Query = fmt.Sprintf("%s %s EXISTS (%s)", orm.Query, operator, query)
+	default:
+		orm.Query = fmt.Sprintf("%s EXISTS (%s)", orm.Query, query)
+	}
 
 	return *orm
 }
